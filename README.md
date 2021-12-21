@@ -13,7 +13,20 @@ brew upgrade node
 vi lib/CMakeFiles/gnuradio-fec.dir/link.txt 
 
 ## Convert to Plugin
+Share the struct binary (un)packed through the socket.  common.h
+This is a start, need to better define this.
 
+```typedef struct
+{
+    int date;
+    int time;
+    int hz_low;
+    int hz_high;
+    int hz_bin_width;
+    int num_samples;
+    int dB;
+} hackrf_plugin_device;
+```
 
 ### common.h
 
