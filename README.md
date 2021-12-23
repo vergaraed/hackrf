@@ -29,7 +29,7 @@ This is a start, need to better define this.
 ```
 
 ### common.h
-
+```
 typedef struct
 {
     int date;
@@ -40,14 +40,14 @@ typedef struct
     int num_samples;
     int dB;
 } hackrf_plugin_device;
-
+```
 
 ### client.h
 
 
 
 ### hackrf_sweep.c
-
+```
 int hackrf_sweep(int minfreq, int maxfreq, int numsweeps)
 - //int main(int argc, char** argv) - a:f:p:l:g:d:n:N:w:1BIr:h?
 - hackrf_start_rx(device, rx_callback, NULL)
@@ -61,10 +61,10 @@ int rx_callback(hackrf_transfer* transfer)
   //  (uint64_t)(frequency+(DEFAULT_SAMPLE_RATE_HZ/2)),
   //  (uint64_t)(frequency+((DEFAULT_SAMPLE_RATE_HZ*3)/4)),
   //  fft_bin_width, fftSize);
-
+```
 
 ### hackrf.c
-
+```
 int ADDCALL hackrf_start_rx(hackrf_device* device, hackrf_sample_block_cb_fn callback, void* rx_ctx)
     device->rx_ctx = rx_ctx;
     result = create_transfer_thread(device, endpoint_address, callback);
@@ -85,4 +85,4 @@ struct hackrf_device {
     volatile bool do_exit;
     unsigned char buffer[TRANSFER_COUNT * TRANSFER_BUFFER_SIZE];
 };
-
+```
