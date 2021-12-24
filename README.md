@@ -28,7 +28,26 @@ This is a start, need to better define this.
 } hackrf_plugin_device;
 ```
 
-### common.h
+### common_hackrf.h
+
+```
+#pragma_pack(1);
+typedef struct
+{   
+    //time_str = time_str;
+    uint64_t tv_usec;
+    uint64_t lowfreq;
+    uint64_t upperfreq;
+    uint64_t fft_bin_width;
+    uint64_t fftSize;
+    uint64_t sampleratefrequency1; //+(DEFAULT_SAMPLE_RATE_HZ/2)),
+    uint64_t sampleratefrequency2; //+((DEFAULT_SAMPLE_RATE_HZ*3)/4)),
+    uint64_t fft_bin_width;
+    uint64_t fftSize;
+} hackrf_sweep_vals;
+
+#pragma_unpack(0);
+```
 ```
 typedef struct
 {
