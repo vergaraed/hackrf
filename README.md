@@ -1,7 +1,6 @@
 # Client
 Client (IoT controller) that has a client profile (CID) and encrypts data to persist by the Node via RF / Bluetooth.
 
-
 ## Installing gnuradio on Mac
 
 brew upgrade node
@@ -10,7 +9,7 @@ brew upgrade node
  /usr/local/lib/libgsl.dylib 
  /usr/local/Cellar/gsl/2.7/lib/libgslcblas.dylib
 
-vi lib/CMakeFiles/gnuradio-fec.dir/link.txt 
+- vi lib/CMakeFiles/gnuradio-fec.dir/link.txt 
 
 ## Convert to Plugin
 
@@ -73,3 +72,31 @@ struct hackrf_device {
     unsigned char buffer[TRANSFER_COUNT * TRANSFER_BUFFER_SIZE];
 };
 
+## Sweep Arguments
+
+Output Fields:
+```
+date, time, hz_low, hz_high, hz_bin_width, num_samples, dB, dB
+```
+```
+hackrf_sweep -f 350:5600  2>/dev/null | awk -F"[ '''\,]+"  ' / -3/ || / -2/ || / -1.\./  {print $2, $4, $7, $8, $9, $10, $11}'
+```
+
+```
+02:44:08 2830000000 -66.73 -70.95 -64.56 -63.61 -60.15
+02:44:08 2835000000 -63.14 -64.74 -73.56 -63.42 -62.87
+02:44:08 2845000000 -58.15 -59.09 -59.47 -60.29 -69.92
+02:44:08 2840000000 -61.67 -65.14 -75.18 -70.25 -67.14
+```
+
+
+```
+hackrf_sweep -f 350:5600  2>/dev/null | awk -F"[ '''\,]+"  ' / -3/ || / -4/ || / -1.\./ '  
+```
+
+```
+2022-01-05, 02:45:30, 5150000000, 5155000000, 1000000.00, 20, -52.62, -44.58, -44.72, -54.80, -71.85
+2022-01-05, 02:45:30, 1240000000, 1245000000, 1000000.00, 20, -46.04, -54.41, -56.32, -55.11, -58.29
+2022-01-05, 02:45:31, 5150000000, 5155000000, 1000000.00, 20, -59.29, -45.35, -45.03, -57.24, -62.56
+2022-01-05, 02:45:31, 1240000000, 1245000000, 1000000.00, 20, -49.74, -61.51, -66.79, -64.02, -64.78
+```

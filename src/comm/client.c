@@ -11,16 +11,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../include/common.h"
 #include "../../include/client.h"
-#include "../../include/utils.h"
-//#include "../../include/hackrf_sweep.h"
 
 peer_t server;
 
 void shutdown_properly(int code);
-static void (*fft_power_callback)(char /*full_sweep_done*/, int /*bins*/, double* /*freqStart*/, float /*fft_bin_Hz*/, float* /*powerdBm*/);
-
 
 void handle_signal_action(int sig_number)
 {
@@ -142,16 +137,34 @@ void shutdown_properly(int code)
   //exit(code);
 }
 
-int handle_received_message(message_t *message)
-{
-  printf("Received message from server.\n");
-  print_message(message);
-  return 0;
+processMessageCB *plugin_cb;
+
+//void handle_received_message(hackrf_sweep_args *req_args)
+void handle_received_message(server_req *req_args)
+{    
+    printf("Received message from server process request to IOT.\n");
+    print_message(req_args);
+    //send to plugin::sweep_request_cb
+    // startClientSocketThreadArgs::procSocketMsgCB
+
+    //sweep_request_cb(req_args);
+    plugin_cb(req_args);
+
+    return 0;
 }
 
-int main(int argc, char** argv) {
-//    int clientconnect(void (*_fft_power_callback)(char /*full_sweep_done*/), char *ip, int port)
-//{
+int StartClientSocket(startClientSocketThreadArgs *inArgs)
+{
+    startClientSocketThreadArgs *sCSTA = (*startClientSocketThreadArgs) inArgs;
+    //processMessageCB *cb = sCSTA->procSocketMsgCB;
+    plugin_cb = sCSTA->procSocketMsgCB;
+
+    int ret = clientconnect(sCSTA->ip, sCSTA->port); 
+
+    return ret;
+}
+int clientconnect(char *ip, int port, char *CID )
+{
     if (setup_signals() != 0)
     {
 	    fprintf(stderr,
@@ -159,24 +172,18 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
   
-    if (_fft_power_callback == NULL)
-    {
-	    fprintf(stderr,
-			"argument error: callback function pointer NULL\n");
-		return EXIT_FAILURE;
-	}
-	fft_power_callback	= _fft_power_callback;
-    
     char client_name[256];
     get_client_name(ip, client_name);
     printf("Client '%s' start.\n", client_name);
-     
-    create_peer(&server);
+    strncpy(server->CID, CID, CID_MAX_SIZE);  
+    if (create_peer(&server, CID) > 0)
+        return -1;
+
     if (connect_server(ip,port,&server) != 0)
     {
         shutdown_properly(EXIT_FAILURE);
         return -1;
-  }
+    }
 
   /* Set nonblock for stdin. */
   int flag = fcntl(STDIN_FILENO, F_GETFL, 0);
@@ -252,10 +259,4 @@ int main(int argc, char** argv) {
   }
   
   return 0;
-}
-
-int init( void (*_fft_power_callback)(char /*full_sweep_done*/,  int /*bins*/, double* /*freqStart*/,  float /*fft_bin_Hz*/, float* /*powerdBm*/))
-{
-
-    return 0;
 }

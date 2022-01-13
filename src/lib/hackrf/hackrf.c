@@ -1506,6 +1506,7 @@ static void LIBUSB_CALL hackrf_libusb_transfer_callback(struct libusb_transfer* 
 			.tx_ctx = device->tx_ctx
 		};
 
+        //sending it back to client (hackrf_sweep)
 		if( device->callback(&transfer) == 0 )
 		{
 			if( libusb_submit_transfer(usb_transfer) < 0)
@@ -1887,7 +1888,7 @@ int ADDCALL hackrf_set_hw_sync_mode(hackrf_device* device, const uint8_t value) 
  *         interleaved sub-steps, allowing the host to select the best portions
  *         of the FFT of each sub-step and discard the rest.
  */
-int ADDCALL hackrf_init_sweep(hackrf_device* device,
+int ADDCALL hackrf_init_sweep(hackrf_device* device, hackrf_
 		const uint16_t* frequency_list, const int num_ranges,
 		const uint32_t num_bytes, const uint32_t step_width,
 		const uint32_t offset, const enum sweep_style style) {

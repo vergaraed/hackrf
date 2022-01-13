@@ -22,10 +22,8 @@
  */
 
 #include "../../../include/hackrf.h"
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include "../../../include/hackrf_sweep.h"
+#include "../../../../../include/common.h"
 #include <getopt.h>
 #include <time.h>
 
@@ -288,11 +286,51 @@ int rx_callback(hackrf_transfer* transfer) {
 		for (i=0; i < fftSize; i++) {
 			pwr[i] = logPower(fftwOut[i], 1.0f / fftSize);
 		}
-		if(binary_output) {
+		if(binary_output) 
+        {
+            /*
+            byte buffer[MAXSIZEMSG];
+            // Perhaps be this the IPFS output?
+            // Would eliminate any serialization.
+            // Fast but not very client friendly as would require unpacking bytes accross OS's
+
+            //char buffer[18];
+            //htonHeaderData(myPacketHeader, myPacketData, buffer);
+            //send(sockfd, buffer, 18, 0);
+
+            memcpy(buffer, (uint64_t)(time_stamp.tv_usec), sizeof(uint64_t));
+            memcpy(buffer + 50, s1.time, 50);
+            uint32_t net_len = htonl(s1.len);
+            memcpy(buffer + 100, &net_len, 4);
+            memcpy(buffer + 104, ss1.buf, 100);
+            ssize_t size=send(client_sock, buffer, BUFFER_LEN);
+            */
+            
+            // Call cb with the fields
+            hackrf_sweep_vals *sweepvals = (*hackrf_sweep_vals)malloc(sizeof(hackrf_sweep_vals));
+            sweepvals->tv_usec = (uint64_t)(time_stamp.tv_usec);
+            sweepvals->lowfreq = (uint64_t)(frequency);
+            sweepvals->upperfreq = (uint64_t)(frequency+(DEFAULT_SAMPLE_RATE_HZ/4));
+            sweepvals->frequency1 = (uint64_t)(frequency+(DEFAULT_SAMPLE_RATE_HZ/2)),
+            sweepvals->frequency2 = (uint64_t)(frequency+((DEFAULT_SAMPLE_RATE_HZ*3)/4)),
+            sweepvals->fft_bin_width = fft_bin_width;
+            sweepvals->fftSize = fftSize;
+            sweepvals->band_edge = frequency;
+           
+            sweepvals->record_length, sizeof(record_length); 
+            2 * sizeof(band_edge)
+                    + (fftSize/4) * sizeof(float);
+            sweepvals->pwr = malloc(sizeof(sweepvals->pwr), (fftSize / 4)+1);
+
+            for(i = 0; (fftSize / 4) > i; i++) {
+                sweepvals->pwr[i] = pwr[i + 1 + (fftSize/8)]);
+
+            retdata2client_cb(sweepvals);
+
 			record_length = 2 * sizeof(band_edge)
 					+ (fftSize/4) * sizeof(float);
 
-			fwrite(&record_length, sizeof(record_length), 1, fd);
+/*			fwrite(&record_length, sizeof(record_length), 1, fd);
 			band_edge = frequency;
 			fwrite(&band_edge, sizeof(band_edge), 1, fd);
 			band_edge = frequency + DEFAULT_SAMPLE_RATE_HZ / 4;
@@ -305,6 +343,7 @@ int rx_callback(hackrf_transfer* transfer) {
 			band_edge = frequency + (DEFAULT_SAMPLE_RATE_HZ * 3) / 4;
 			fwrite(&band_edge, sizeof(band_edge), 1, fd);
 			fwrite(&pwr[1+fftSize/8], sizeof(float), fftSize/4, fd);
+            */
 		} else if(ifft_output) {
 			ifft_idx = (uint32_t) round((frequency - (uint64_t)(FREQ_ONE_MHZ*frequencies[0]))
 					/ fft_bin_width);
@@ -325,7 +364,6 @@ int rx_callback(hackrf_transfer* transfer) {
             // back to the CR Node or client.
             
             uint64_t _frequency = (uint64_t)(frequency);
-
 
 			time_t time_stamp_seconds = time_stamp.tv_sec;
 			fft_time = localtime(&time_stamp_seconds);
@@ -354,10 +392,30 @@ int rx_callback(hackrf_transfer* transfer) {
 			fprintf(fd, "\n");
             
             // Call cb with the fields
+             hackrf_sweep_vals *sweepvals = (*hackrf_sweep_vals)malloc(sizeof(hackrf_sweep_vals));
+             //struct tm *localtime(const time_t *timer)
+            // sweepvals->time_str = time_str;
+             sweepvals->tv_usec = (uint64_t)time_stamp.tv_usec;
+             sweepvals->lowfreq = (uint64_t)(frequency);
+             sweepvals->upperfreq = (uint64_t)(frequency);
+             sweepvals->frequency1 = (uint64_t)(frequency+(DEFAULT_SAMPLE_RATE_HZ/2)),
+             sweepvals->frequency2 = (uint64_t)(frequency+DEFAULT_SAMPLE_RATE_HZ/4);
+             sweepvals->frequency2 = (uint64_t)(frequency+((DEFAULT_SAMPLE_RATE_HZ*3)/4)),
+             sweepvals->fft_bin_width = fft_bin_width;
+             
+             //Use macro NUM_ELEM(sweepvals->pwr) in hackrf_common.h
+             //sweepvals->fftSize = fftSize;
             
+             int fftSampleSize = fftSize / 4;
+
+             sweepvals->pwr = (*sweepvals->pwr)malloc(sizeof(*sweepvals->pwr) * fftSampleSize);
+              for(i = 0; fftSampleSize > i; i++) 
+              {
+                fprintf(fd, ", %.2f", pwr[i + 1 + (fftSize*5)/8]);
+                sweepvals->pwr[i] = pwr[i + 1 + (fftSize*5)/8];
+              }
+             retdata2client_cb(sweepvals);
             // cb(time_str, time_stamp.tv_usec, 
-            //  (uint64_t)(frequency+(DEFAULT_SAMPLE_RATE_HZ/2)),
-            //  (uint64_t)(frequency+((DEFAULT_SAMPLE_RATE_HZ*3)/4)),
             //  fft_bin_width, fftSize);
 		}
 	}
@@ -404,8 +462,149 @@ void sigint_callback_handler(int signum)  {
 }
 #endif
 
-//int main(int argc, char** argv) {
-int hackrf_sweep(int minfreq, int maxfreq, int numsweeps)
+//startHackRFThreadData
+int InitHackRFDevice(hackrf_device* hackrf_dev)
+{
+
+#ifdef _MSC_VER
+    SetConsoleCtrlHandler( (PHANDLER_ROUTINE) sighandler, TRUE );
+#else
+    signal(SIGINT, &sigint_callback_handler);
+    signal(SIGILL, &sigint_callback_handler);
+    signal(SIGFPE, &sigint_callback_handler);
+    signal(SIGSEGV, &sigint_callback_handler);
+    signal(SIGTERM, &sigint_callback_handler);
+    signal(SIGABRT, &sigint_callback_handler);
+#endif
+    fprintf(stderr, "call hackrf_sample_rate_set(%.03f MHz)\n",
+           ((float)DEFAULT_SAMPLE_RATE_HZ/(float)FREQ_ONE_MHZ));
+    result = hackrf_set_sample_rate_manual(device, DEFAULT_SAMPLE_RATE_HZ, 1);
+    if( result != HACKRF_SUCCESS ) {
+        fprintf(stderr, "hackrf_sample_rate_set() failed: %s (%d)\n",
+               hackrf_error_name(result), result);
+        usage();
+        return EXIT_FAILURE;
+    }
+
+    fprintf(stderr, "call hackrf_baseband_filter_bandwidth_set(%.03f MHz)\n",
+            ((float)DEFAULT_BASEBAND_FILTER_BANDWIDTH/(float)FREQ_ONE_MHZ));
+    result = hackrf_set_baseband_filter_bandwidth(device, DEFAULT_BASEBAND_FILTER_BANDWIDTH);
+    if( result != HACKRF_SUCCESS ) {
+        fprintf(stderr, "hackrf_baseband_filter_bandwidth_set() failed: %s (%d)\n",
+               hackrf_error_name(result), result);
+        usage();
+        return EXIT_FAILURE;
+    }
+
+    return 0;
+}
+
+static void hackRFSweepThread( void *hrf_args)
+{
+    //HackRFThreadData p_ThreadData = (HackRFThreadData*)hrf_tdata;
+    HackRFSweepArgs *p_hrfsa = (HackRFSweepArgs*)hrf_args;
+    int serial_number = p_hrfsa->serial_number;
+    SendToClientCB = p_hrfsa->sendsweepresultstoclientcb;
+	int result = hackrf_init();
+	if( result != HACKRF_SUCCESS ) {
+		fprintf(stderr, "hackrf_init() failed: %s (%d)\n", hackrf_error_name(result), result);
+		usage();
+		return EXIT_FAILURE;
+	}
+	
+	result = hackrf_open_by_serial(serial_number, &device);
+	if( result != HACKRF_SUCCESS ) {
+		fprintf(stderr, "hackrf_open() failed: %s (%d)\n", hackrf_error_name(result), result);
+		usage();
+		return EXIT_FAILURE;
+	}
+
+/*	if((NULL == path) || (strcmp(path, "-") == 0)) {
+		fd = stdout;
+	} else {
+		fd = fopen(path, "wb");
+	}
+
+	if(NULL == fd) {
+		fprintf(stderr, "Failed to open file: %s\n", path);
+		return EXIT_FAILURE;
+	
+	// Change fd buffer to have bigger one to store or read data on/to HDD 
+	result = setvbuf(fd , NULL , _IOFBF , FD_BUFFER_SIZE);
+	if( result != 0 ) {
+		fprintf(stderr, "setvbuf() failed: %d\n", result);
+		usage();
+		return EXIT_FAILURE;
+	}
+*/
+
+#ifdef _MSC_VER
+	SetConsoleCtrlHandler( (PHANDLER_ROUTINE) sighandler, TRUE );
+#else
+	signal(SIGINT, &sigint_callback_handler);
+	signal(SIGILL, &sigint_callback_handler);
+	signal(SIGFPE, &sigint_callback_handler);
+	signal(SIGSEGV, &sigint_callback_handler);
+	signal(SIGTERM, &sigint_callback_handler);
+	signal(SIGABRT, &sigint_callback_handler);
+#endif
+	fprintf(stderr, "call hackrf_sample_rate_set(%.03f MHz)\n",
+		   ((float)DEFAULT_SAMPLE_RATE_HZ/(float)FREQ_ONE_MHZ));
+	result = hackrf_set_sample_rate_manual(device, DEFAULT_SAMPLE_RATE_HZ, 1);
+	if( result != HACKRF_SUCCESS ) {
+		fprintf(stderr, "hackrf_sample_rate_set() failed: %s (%d)\n",
+			   hackrf_error_name(result), result);
+		usage();
+		return EXIT_FAILURE;
+	}
+
+	fprintf(stderr, "call hackrf_baseband_filter_bandwidth_set(%.03f MHz)\n",
+			((float)DEFAULT_BASEBAND_FILTER_BANDWIDTH/(float)FREQ_ONE_MHZ));
+	result = hackrf_set_baseband_filter_bandwidth(device, DEFAULT_BASEBAND_FILTER_BANDWIDTH);
+	if( result != HACKRF_SUCCESS ) {
+		fprintf(stderr, "hackrf_baseband_filter_bandwidth_set() failed: %s (%d)\n",
+			   hackrf_error_name(result), result);
+		usage();
+		return EXIT_FAILURE;
+	}
+
+	result = 
+}
+static int StartHackRFSweepService(startHackRFThreadData *pHackRFThreadData)
+{
+    int result=0;
+    pthread_t processRequestThread;
+
+    /*pHackRFThreadData->port = PORT;
+    pHackRFThreadData->path = (char*)malloc(sizeof(char*)*strlen(PATH))+1;
+    strncpy(pHackRFThreadData->path, PATH, sizeof(pThreadCurlData->path) -1);
+    pHackRFThreadData->url = (char*)malloc(sizeof(char*)*strlen(URL))+1;  //"localhost";
+    strncpy(pHackRFThreadData->url, URL, sizeof(pHackRFThreadData->url)-1);
+    pHackRFThreadData->protocol  = (char*)malloc(sizeof(char*)*strlen(PROTOCOL)+1);  //"https";
+    pHackRFThreadData->running = true;
+    strncpy(pHackRFThreadData->protocol, PROTOCOL, sizeof(pHackRFThreadData->protocol)); // = "https";
+*/
+    printf("Start HackRF Sweep Service Thread.\n");
+    int result = 
+        pthread_create(&hackRFSweepThread, NULL, hackrf_sweep, (void *)pHackRFThreadData);
+
+    if(result == 0)
+    {
+        fprintf(stderr, "Error creating hackRFSweepThread. Err=%d\n", result);
+        return result;
+    }
+
+    //Wait here until thread is done.
+    pthread_join(hackRFSweepThread, NULL);
+
+    printf("Joined HackRFSweepThread.  Shutting down HackRFSweepService now...\n");
+
+    return result;
+}
+
+
+
+int hackrf_sweep(hackrf_sweep_args *args)
 {
 	int opt, i, result = 0;
 	const char* path = NULL;
@@ -414,114 +613,42 @@ int hackrf_sweep(int minfreq, int maxfreq, int numsweeps)
 	struct timeval time_now;
 	float time_diff;
 	float sweep_rate;
-	unsigned int lna_gain=16, vga_gain=20;
-	uint32_t freq_min = minfreq;
-	uint32_t freq_max = maxfreq;
-	uint32_t requested_fft_bin_width;
+	unsigned int lna_gain=args->lna_gain; //16,
+    unsigned int vga_gain=args->vga_gain; //20;
+	uint32_t freq_min = args->freq_min;
+	uint32_t freq_max = args->freq_max;
+	uint32_t requested_fft_bin_width = args->requested_fft_bin_width;
+    uint32_t num_sweeps = args->num_sweeps;
+    uint32_t num_sweeps = args->sweeps;
 
-/*
-	while( (opt = getopt(argc, argv, "a:f:p:l:g:d:n:N:w:1BIr:h?")) != EOF ) {
-		result = HACKRF_SUCCESS;
-		switch( opt ) 
-		{
-		case 'd':
-			serial_number = optarg;
-			break;
+    retdata2client_cb = args->retdata2client_cb;
 
-		case 'a':
-			amp = true;
-			result = parse_u32(optarg, &amp_enable);
-			break;
+    if(MAX_SWEEP_RANGES <= num_ranges) {
+        fprintf(stderr,
+	        "argument error: specify a maximum of %u frequency ranges.\n",
+		    MAX_SWEEP_RANGES);
+	    usage();
+	    return EXIT_FAILURE;
+    }
 
-		case 'f':
-			result = parse_u32_range(optarg, &freq_min, &freq_max);
-			if(freq_min >= freq_max) {
-				fprintf(stderr,
-						"argument error: freq_max must be greater than freq_min.\n");
-				usage();
-				return EXIT_FAILURE;
-			}
-			if(FREQ_MAX_MHZ <freq_max) {
-				fprintf(stderr,
-						"argument error: freq_max may not be higher than %u.\n",
-						FREQ_MAX_MHZ);
-				usage();
-				return EXIT_FAILURE;
-			}
-			if(MAX_SWEEP_RANGES <= num_ranges) {
-				fprintf(stderr,
-						"argument error: specify a maximum of %u frequency ranges.\n",
-						MAX_SWEEP_RANGES);
-				usage();
-				return EXIT_FAILURE;
-			}
-			frequencies[2*num_ranges] = (uint16_t)freq_min;
-			frequencies[2*num_ranges+1] = (uint16_t)freq_max;
-			num_ranges++;
-			break;
-
-		case 'p':
-			antenna = true;
-			result = parse_u32(optarg, &antenna_enable);
-			break;
-
-		case 'l':
-			result = parse_u32(optarg, &lna_gain);
-			break;
-
-		case 'g':
-			result = parse_u32(optarg, &vga_gain);
-			break;
-
-		case 'n':
-			result = parse_u32(optarg, &num_samples);
-			break;
-
-		case 'N':
-			finite_mode = true;
-			result = parse_u32(optarg, &num_sweeps);
-			break;
-
-		case 'w':
-			result = parse_u32(optarg, &requested_fft_bin_width);
-			fftSize = DEFAULT_SAMPLE_RATE_HZ / requested_fft_bin_width;
-			break;
-
-		case '1':
-			one_shot = true;
-			break;
-
-		case 'B':
-			binary_output = true;
-			break;
-
-		case 'I':
-			ifft_output = true;
-			break;
-
-		case 'r':
-			path = optarg;
-			break;
-
-		case 'h':
-		case '?':
-			usage();
-			return EXIT_SUCCESS;
-
-		default:
-			fprintf(stderr, "unknown argument '-%c %s'\n", opt, optarg);
-			usage();
-			return EXIT_FAILURE;
-		}
-		
-		if( result != HACKRF_SUCCESS ) {
-			fprintf(stderr, "argument error: '-%c %s' %s (%d)\n", opt, optarg, hackrf_error_name(result), result);
-			usage();
-			return EXIT_FAILURE;
-		}		
-	}
-
-	if (lna_gain % 8)
+    if(freq_min >= freq_max) {
+        fprintf(stderr,
+            "argument error: freq_max must be greater than freq_min.\n");
+        usage();
+        return EXIT_FAILURE;
+    }
+    if(FREQ_MAX_MHZ <freq_max) {
+        fprintf(stderr,
+             "argument error: freq_max may not be higher than %u.\n",
+             FREQ_MAX_MHZ);
+        usage();
+        return EXIT_FAILURE;
+    }
+    frequencies[2*num_ranges] = (uint16_t)freq_min;
+    frequencies[2*num_ranges+1] = (uint16_t)freq_max;
+    num_ranges++;
+    
+    if (lna_gain % 8)
 		fprintf(stderr, "warning: lna_gain (-l) must be a multiple of 8\n");
 
 	if (vga_gain % 2)
@@ -554,8 +681,8 @@ int hackrf_sweep(int minfreq, int maxfreq, int numsweeps)
 	}
 
 	if (0 == num_ranges) {
-		frequencies[0] = (uint16_t)freq_min;
-		frequencies[1] = (uint16_t)freq_max;
+		frequencies[0] = (uint16_t)(args->freq_min);
+		frequencies[1] = (uint16_t)(args->freq_max);
 		num_ranges++;
 	}
 
@@ -599,69 +726,7 @@ int hackrf_sweep(int minfreq, int maxfreq, int numsweeps)
 		window[i] = (float) (0.5f * (1.0f - cos(2 * M_PI * i / (fftSize - 1))));
 	}
 
-	result = hackrf_init();
-	if( result != HACKRF_SUCCESS ) {
-		fprintf(stderr, "hackrf_init() failed: %s (%d)\n", hackrf_error_name(result), result);
-		usage();
-		return EXIT_FAILURE;
-	}
-	
-	result = hackrf_open_by_serial(serial_number, &device);
-	if( result != HACKRF_SUCCESS ) {
-		fprintf(stderr, "hackrf_open() failed: %s (%d)\n", hackrf_error_name(result), result);
-		usage();
-		return EXIT_FAILURE;
-	}
-
-	if((NULL == path) || (strcmp(path, "-") == 0)) {
-		fd = stdout;
-	} else {
-		fd = fopen(path, "wb");
-	}
-
-	if(NULL == fd) {
-		fprintf(stderr, "Failed to open file: %s\n", path);
-		return EXIT_FAILURE;
-	}
-	/* Change fd buffer to have bigger one to store or read data on/to HDD */
-	result = setvbuf(fd , NULL , _IOFBF , FD_BUFFER_SIZE);
-	if( result != 0 ) {
-		fprintf(stderr, "setvbuf() failed: %d\n", result);
-		usage();
-		return EXIT_FAILURE;
-	}
-
-#ifdef _MSC_VER
-	SetConsoleCtrlHandler( (PHANDLER_ROUTINE) sighandler, TRUE );
-#else
-	signal(SIGINT, &sigint_callback_handler);
-	signal(SIGILL, &sigint_callback_handler);
-	signal(SIGFPE, &sigint_callback_handler);
-	signal(SIGSEGV, &sigint_callback_handler);
-	signal(SIGTERM, &sigint_callback_handler);
-	signal(SIGABRT, &sigint_callback_handler);
-#endif
-	fprintf(stderr, "call hackrf_sample_rate_set(%.03f MHz)\n",
-		   ((float)DEFAULT_SAMPLE_RATE_HZ/(float)FREQ_ONE_MHZ));
-	result = hackrf_set_sample_rate_manual(device, DEFAULT_SAMPLE_RATE_HZ, 1);
-	if( result != HACKRF_SUCCESS ) {
-		fprintf(stderr, "hackrf_sample_rate_set() failed: %s (%d)\n",
-			   hackrf_error_name(result), result);
-		usage();
-		return EXIT_FAILURE;
-	}
-
-	fprintf(stderr, "call hackrf_baseband_filter_bandwidth_set(%.03f MHz)\n",
-			((float)DEFAULT_BASEBAND_FILTER_BANDWIDTH/(float)FREQ_ONE_MHZ));
-	result = hackrf_set_baseband_filter_bandwidth(device, DEFAULT_BASEBAND_FILTER_BANDWIDTH);
-	if( result != HACKRF_SUCCESS ) {
-		fprintf(stderr, "hackrf_baseband_filter_bandwidth_set() failed: %s (%d)\n",
-			   hackrf_error_name(result), result);
-		usage();
-		return EXIT_FAILURE;
-	}
-
-	result = hackrf_set_vga_gain(device, vga_gain);
+    result = hackrf_set_vga_gain(device, vga_gain);
 	result |= hackrf_set_lna_gain(device, lna_gain);
 
 	/*
@@ -790,3 +855,4 @@ int hackrf_sweep(int minfreq, int maxfreq, int numsweeps)
 	fprintf(stderr, "exit\n");
 	return exit_code;
 }
+

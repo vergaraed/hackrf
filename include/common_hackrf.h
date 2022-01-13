@@ -1,5 +1,5 @@
-#ifndef COMMON_H
-#define COMMON_H
+#ifndef COMMON_HACKRF_H
+#define COMMON_HACKRF_H
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,6 +7,26 @@
 #include <string.h>
 #include <netinet/in.h>
 #include <errno.h>
+#include <stdint.h>
+#include "../../../include/common.h"
+
+char* ullx(uint64_t val)
+{
+    static char buf[34] = { [0 ... 33] = 0 };
+    char* out = &buf[33];
+    uint64_t hval = val;
+    unsigned int hbase = 16;
+
+    do {
+        *out = "0123456789abcdef"[hval % hbase];
+        --out;
+        hval /= hbase;
+    } while(hval);
+
+    *out-- = 'x', *out = '0';
+
+    return out;
+}
 
 /* Maximum bytes that can be send() or recv() via net by one call.
  * It's a good idea to test sending one byte by one.
@@ -15,53 +35,160 @@
 
 /* Size of send queue (messages). */
 #define MAX_MESSAGES_BUFFER_SIZE 550
-
-#define SENDER_MAXSIZE 158
-#define DATA_MAXSIZE 112
+#define MAX_CID_SIZE 64
+#define MAX_IP_SIZE 16
+#define MAX_SENDER_SIZE 158
+#define MAX_DATA_SIZE 112
 #define SERVER_IPV4_ADDR "127.0.0.1"
-//#define SERVER_LISTEN_PORT 33235
+#define SERVER_LISTEN_PORT 33235
+#define SERVER_CID  "QmfQkD8pBSBCBxWEwFSu4XaDVSWK6bjnNuaWZjMyQbyDub"
+// This should work since we are counting the pointers in a 
+#define NUM_ELEM(x) (sizeof (x) / sizeof (*(x)))
+
+//void delete_peer(struct peer_t *peer, int totalpeers, int i)
+int delete_from_obj_array(obj** array, int i, int &totalobjs)
+{
+    obj *tmp = (obj *) realloc(array, (--totalobjs)*sizeof(obj*));
+    
+    for (int c = i; c < totalobjs; c++)
+        array[c] = array[c+1];
+
+    return totalobjs;
+}
+
+void add_to_obj_array(const obj* const new_obj, obj** array) //, const int *number_of_elements)
+{
+    int number_of_elements = NUM_ELEM(array);
+
+    // expand array with one more item
+    array = (obj**)realloc(array, (++(number_of_elements)) * sizeof(new_obj));
+
+    if (array == NULL )
+    {
+        /* memory request refused :( */
+        return;
+    }
+
+    // Put new item at the last place on the array
+    // Fix this to insert in an ordered by CID list.
+    // Better yet create an index list of addresses to 
+    // these structs ordered bu CID etc...
+    // Then lookup speeds improve using binary tree searches.
+    array[number_of_elements] = new_obj;
+}
 
 // message --------------------------------------------------------------------
 
 #define SAMPLES_NUM
 
-typedef struct {
-  char sender[SENDER_MAXSIZE];
-  char data[DATA_MAXSIZE];
-}  message_t;
+#pragma_pack(1);
 
-typedef struct 
+//This is used by the client to return requested data to the server.
+typedef struct
 {
-    int date;
-    int time;
-    int hz_low; 
-    int hz_high; 
-    int hz_bin_width; 
-    int num_samples; 
-    int dB; 
-} hackrf_plugin_device;
+    //time_str = time_str;
+    uint64_t tv_usec;
+    uint64_t lowfreq;
+    uint64_t upperfreq;
+    uint64_t fft_bin_width;
+    uint64_t fftSize;
+    uint64_t sampleratefrequency1; //+(DEFAULT_SAMPLE_RATE_HZ/2)),
+    uint64_t sampleratefrequency2; //+((DEFAULT_SAMPLE_RATE_HZ*3)/4)),
+    uint64_t fft_bin_width;
+    uint64_t fftSampleSize;
+    uint64_t **power;
+    uint64_t power_cnt;
+} hackrf_sweep_vals;
 
-typedef struct 
+//This is used by the server to issue requests to the IOT device
+typedef struct
 {
-    int date;
-    int time;
-    int hz_low; 
-    int hz_high; 
-    int hz_bin_width; 
-    int num_samples; 
-    int dB; 
-} hackrf_plugin_data;
+    uint64_t date;
+    uint64_t time;
+    uint64_t hz_low;
+    uint64_t hz_high;
+    uint64_t hz_bin_width;
+    uint64_t num_samples;
+    uint64_t dB;
+} hackrf_sweep_request;
 
-int prepare_message(char *sender, char *data, message_t *message)
+//This is used by the server to issue requests to the IOT device
+typedef struct
+{
+    uint8_t     cmd;
+    byte        *cmdbuff;
+    uint32_t    cmdlen;
+} server_req;
+
+
+typedef struct
+{
+    char ip[17];
+    uint16 port;
+    *(void processMessageCB(void *)) procSocketMsgCB;
+} startClientSocketThreadArgs;
+
+typedef struct
+{
+    char ip[17];
+    uint16 port;
+    *(void processMessageCB(void *)) procHackRFSweepMsgCB;
+} startHackRFThreadArgs;
+
+#pragma_unpack(0);
+
+
+//startHackRFThreadData
+int InitHackRFDevice(device *)
+{
+
+#ifdef _MSC_VER
+    SetConsoleCtrlHandler( (PHANDLER_ROUTINE) sighandler, TRUE );
+#else
+    signal(SIGINT, &sigint_callback_handler);
+    signal(SIGILL, &sigint_callback_handler);
+    signal(SIGFPE, &sigint_callback_handler);
+    signal(SIGSEGV, &sigint_callback_handler);
+    signal(SIGTERM, &sigint_callback_handler);
+    signal(SIGABRT, &sigint_callback_handler);
+#endif
+    fprintf(stderr, "call hackrf_sample_rate_set(%.03f MHz)\n",
+           ((float)DEFAULT_SAMPLE_RATE_HZ/(float)FREQ_ONE_MHZ));
+    result = hackrf_set_sample_rate_manual(device, DEFAULT_SAMPLE_RATE_HZ, 1);
+    if( result != HACKRF_SUCCESS ) {
+        fprintf(stderr, "hackrf_sample_rate_set() failed: %s (%d)\n",
+               hackrf_error_name(result), result);
+        usage();
+        return EXIT_FAILURE;
+    }
+
+    fprintf(stderr, "call hackrf_baseband_filter_bandwidth_set(%.03f MHz)\n",
+            ((float)DEFAULT_BASEBAND_FILTER_BANDWIDTH/(float)FREQ_ONE_MHZ));
+    result = hackrf_set_baseband_filter_bandwidth(device, DEFAULT_BASEBAND_FILTER_BANDWIDTH);
+    if( result != HACKRF_SUCCESS ) {
+        fprintf(stderr, "hackrf_baseband_filter_bandwidth_set() failed: %s (%d)\n",
+               hackrf_error_name(result), result);
+        usage();
+        return EXIT_FAILURE;
+    }
+
+    return 0;
+}
+
+int prepare_val_message(char *sender, byte *data, hackrf_sweep_vals *message)
 {
   sprintf(message->sender, "%s", sender);
   sprintf(message->data, "%s", data);
   return 0;
 }
  
-int print_message(message_t *message)
+int print_val_message(hackrf_sweep_vals *val)
 {
-  printf("Message: \"%s: %s\"\n", message->sender, message->data);
+  printf("Message: \"%llx: %llx\"\n", val->sender, val->data);
+
+printf("%llx", myval);
+
+
   return 0;
 }
 
@@ -75,7 +202,7 @@ typedef struct {
 
 int create_message_queue(int queue_size, message_queue_t *queue)
 {
-  queue->data = calloc(queue_size, sizeof(char) * DATA_MAXSIZE+1);
+  queue->data = calloc(queue_size, sizeof(char) * MAX_DATA_SIZE+1);
   queue->size = queue_size;
   queue->current = 0;
   
@@ -109,7 +236,7 @@ int dequeue(message_queue_t *queue, message_t *message)
     return -1;
  
   //lock using a lock per queue. 
-  memcpy(message->data, &queue->data[queue->current - 1], DATA_MAXSIZE);
+  memcpy(message->data, &queue->data[queue->current - 1], MAX_DATA_SIZE);
   //message->current = queue->current-1;
 
   print_message(message);
@@ -133,6 +260,7 @@ int dequeue_all(message_queue_t *queue)
 // peer -----------------------------------------------------------------------
 
 typedef struct {
+  char *CID;
   int socket;
   struct sockaddr_in addres;
   
@@ -152,20 +280,40 @@ typedef struct {
   size_t current_receiving_byte;
 } peer_t;
 
-int delete_peer(peer_t *peer)
+typedef peer_t **peers;
+static int peer_cnt=0;
+
+int add_peer(peer_t *peer)
 {
-  close(peer->socket);
-  delete_message_queue(&peer->send_buffer.data);
+    return add_to_obj_array(peers, peer);
+}
+
+void delete_peer(peer_t *peer)
+{
+    for (int i=0; i<peer_cnt; i++)
+    {
+       if (strncmp(peers[i]->CID, peer->CID, MAX_CID_SIZE)==0)
+       {
+           delete_from_obj_array((obj**)peers, i, &peer_cnt);
+           close(peer->socket);
+           delete_message_queue(&peer->send_buffer.data);
+           free(peer->CID);
+           return;
+       }
+    }
+    //peer not found
+   // return -1;
 }
 
 int create_peer(peer_t *peer)
 {
-  create_message_queue(MAX_MESSAGES_BUFFER_SIZE, &peer->send_buffer);
+    create_message_queue(MAX_MESSAGES_BUFFER_SIZE, &peer->send_buffer);
   
-  peer->current_sending_byte   = -1;
-  peer->current_receiving_byte = 0;
-  
-  return 0;
+    peer->current_sending_byte   = -1;
+    peer->current_receiving_byte = 0;
+    peer->size; 
+    peer_cnt = add_peer(peer, sizeof(peer)); 
+    return peer_cnt;
 }
 
 char *peer_get_addres_str(peer_t *peer)
@@ -330,5 +478,5 @@ int read_from_stdin(char *read_buffer, size_t max_len)
   return 0;
 }
 
-#endif /* COMMON_H */
+#endif /* COMMON_HACKRF_H */
 
