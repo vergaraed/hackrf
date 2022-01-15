@@ -104,6 +104,33 @@ int build_fd_sets(peer_t *server, fd_set *read_fds, fd_set *write_fds, fd_set *e
   return 0;
 }
 
+//
+// 
+
+int sendMessageToPeer(peer_t *server, char (*client_name)[] )
+{
+  char read_buffer[DATA_MAXSIZE]; // buffer for stdin
+  
+  //if (read_from_stdin(read_buffer, DATA_MAXSIZE) != 0)
+  if (!parseClientInput(client_name, read_buffer, DATA_MAXSIZE))
+    return 0;
+ 
+  printf("stdin cmd: \n.", read_buffer);
+
+  // Create new message and enqueue it.
+  message_t new_message;
+  prepare_message(client_name, read_buffer, &new_message);
+  print_message(&new_message);
+  
+  if (peer_add_to_send(server, &new_message) < 0) {
+    printf("Send buffer is overflowed, we lost this message!\n");
+    return -1;
+  }
+  printf("New message to send was enqueued right now.\n");
+  
+  return 0;
+}
+
 int handle_read_from_stdin(peer_t *server, char (*client_name)[] )
 {
   char read_buffer[DATA_MAXSIZE]; // buffer for stdin
@@ -128,7 +155,7 @@ int handle_read_from_stdin(peer_t *server, char (*client_name)[] )
   return 0;
 }
 
-/* You should be careful when using this function in multythread program. 
+/* You should be careful when using this function in multithread program. 
  * Ensure that server is thread-safe. */
 void shutdown_properly(int code)
 {
