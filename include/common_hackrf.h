@@ -1,5 +1,12 @@
 #ifndef COMMON_HACKRF_H
 #define COMMON_HACKRF_H
+////////////////////////////////////
+//
+//  BlockchainBPI - Cryptreserve
+//  This should be a common plugin file.
+//  Break out any specific hackrf refs.
+//
+////////////////////////////////////
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -86,20 +93,19 @@ typedef struct
 
 //This is used by the server to issue requests to the IOT device need
 //to use an array across socket to de/serialize the struct and data
-
 typedef struct
 {
     uint8_t     cmd;
     byte        cmdbuff[MAX_DATA_SIZE];
     uint16_t    cmdlen;
-} server_req;
+} server_req; // in reality this may be the IoT Gateway
 
 typedef struct
 {
-    char *peerCID;
-    char *ip;
+    char peerCID[MAX_CID_SIZE];
+    char ip[SERVER_IPV4_ADDR];
     uint16_t port;
-    *(void processMessageCB(void *)) procSocketMsgCB;
+    *(void processMessageCB(void *)) appPMFunc_cb;
 } startClientSocketThreadArgs;
 
 typedef struct

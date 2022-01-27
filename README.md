@@ -1,3 +1,19 @@
+P2P
+
+Connect to CRNode as a plugin - isnt everything a plugin?
+
+Others will connect to CRNode and JOIN the hackrf IoT Node
+
+server_socket to CRNode
+client_sockets are added as others join
+
+- listen socket
+    - adds peers
+- peers
+    p2p_struct
+        client_socket 
+
+
 # Client
 Client (IoT controller) that has a client profile (CID) and encrypts data to persist by the Node via RF / Bluetooth.
 

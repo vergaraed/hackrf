@@ -8,32 +8,10 @@ static peer_t **peers;
 
 int main(int argc, char** argv)
 {
-    //We need the client, hackrf_sweeper and common.
-    //client connects to server portion which is an ip + port setting
-    // connect to server and start processing commands through the call back:
-    // sweep_request_cb
-    
     //Start the Curl IPFS Client and Rest API Server
     pthread_t clientSocketThread;
     pthread_t hackrfThread;
 
-    ////////
-    //Client Socket Connection Thread to manage connections
-    //Connect to Gateway and allow it to request the connection and disconnection
-    // add/remove to other Clients. 
-    printf("Starting Client Socket Thread.\n");
-    
-    startClientSocketThreadArgs *cstargs = malloc(sizeof(startClientSocketThreadArgs)); 
-    ctargs->ip = malloc(sizeof(char*), MAX_IP_SIZE);
-    strncpy(ctargs->ip, SERVER_IPV4_ADDR, SERVER_IPV4_ADDR);
-    ctargs->port = SERVER_LISTEN_PORT;
-    ctargs->CID = malloc(strlen(MAX_CID_LEN")+1);
-    strncpy(ctargs->CID, SERVER_CID, strlen(SERVER_CID));
-    ctargs->procSocketMsgCB = &client_request_cb;
-    ctargs->clientSweepRequestCB = &sweep_request_cb;
-    // Create a Cliet Socket thread to Server (or gateway).  This is a basic IoT thin client owned by a gateway.
-    // Each Gateway has n clients or IoT devices.  The IoT devices will encrypt the data with the Gateways key.
-    // This plugin service should get commands from the server by providing a callback func. (sweep_request_cb)
     if(pthread_create(&clientSocketThread, NULL, &ClientSocketThread, (void*) ctargs)) {
         fprintf(stderr, "Error creating Client Socket thread.\n");
         return 1;
@@ -78,6 +56,35 @@ int main(int argc, char** argv)
     return argc;
 }
 
+pthread_t RunClientSocket()
+{ 
+    pthread_t clientSocketThread;
+
+    //Client Socket Connection Thread to manage connections
+    //Connect to Gateway and allow it to request the connection and disconnection
+    // add/remove to other Clients.
+    printf("Starting a Client Socket Thread.\n");
+
+    startClientSocketThreadArgs *cstargs = malloc(sizeof(startClientSocketThreadArgs));
+    ctargs.ip = malloc(sizeof(char*), MAX_IP_SIZE);
+    strncpy(ctargs.ip, SERVER_IPV4_ADDR, SERVER_IPV4_ADDR);
+    ctargs.port = SERVER_LISTEN_PORT;
+    ctargs.CID = malloc(strlen(MAX_CID_LEN")+1);
+    strncpy(ctargs.CID, SERVER_CID, strlen(SERVER_CID));
+    ctargs.cbIncomingMsg = &client_request_cb;
+    ctargs.clientSweepRequestCB = &sweep_request_cb;
+    
+    // Create a Client Socket thread to Server (or gateway).  This is a basic IoT thin client owned by a gateway.
+    // Each Gateway has n clients or IoT devices.  The IoT devices will encrypt the data with the Gateways key.
+    // This plugin service should get commands from the server by providing a callback func. (sweep_request_cb)
+    if(pthread_create(&clientSocketThread, NULL, &ClientSocketThread, (void*) ctargs)) 
+    {
+        fprintf(stderr, "Error creating Client Socket thread.\n");
+        return 1;
+    }
+    printf("Started Client Socket Thread.\n");
+}
+
 static void* AdminHackRFDeviceThread(void *args)
 {   
     hackrf_plugin_device* hrfadmin = (hackrf_plugin_device*)malloc(sizeof(hackrf_plugin_device))
@@ -97,7 +104,28 @@ static void* HackRFThread(void *threadHackRFArgs)
 
 static void* ClientSocketThread(void *args)
 {
+    // Connect to Server(s)
     printf("Starting HackRF Plugin ClientSocketThread./n");
+    pthread_t clientSocketThread;
+
+    //Client Socket Connection Thread to manage connections
+    //Connect to Gateway and allow it to request the connection and disconnection
+    // add/remove to other Clients.
+    printf("Starting a Client Socket Thread.\n");
+
+    startClientSocketThreadArgs *cstargs = malloc(sizeof(startClientSocketThreadArgs));
+    //ctargs->ip = malloc(sizeof(char*), MAX_IP_SIZE);
+    strncpy(ctargs.ip, SERVER_IPV4_ADDR, SERVER_IPV4_ADDR);
+    ctargs.port = SERVER_LISTEN_PORT;
+    ctargs.CID = malloc(strlen(MAX_CID_SIZE")+1);
+    strncpy(ctargs.CID, SERVER_CID, strlen(SERVER_CID));
+    ctargs.procServerMsgCB = &client_request_cb;
+    ctargs.clientSweepRequestCB = &sweep_request_cb;
+    // Create a Cliet Socket thread to Server (or gateway).  This is a basic IoT thin client owned by a gateway.
+    // Each Gateway has n clients or IoT devices.  The IoT devices will encrypt the data with the Gateways key.
+    // This plugin service should get commands from the server by providing a callback func. (sweep_request_cb)
+    if(pthread_create(&clientSocketThread, NULL, &ClientSocketThread, (void*) ctargs)) 
+    {
     startClientSocketThreadArgs* ctd = (startClientSocketThreadArgs*)args;
     StartClientSocket(ctd);
     printf("Stopped ClientSocketThread./n");
@@ -106,6 +134,8 @@ static void* ClientSocketThread(void *args)
 
 void hackrf_data_updates_cb(byte *buff)
 {
+    //convert from hackrf_clientsweep_vals to hackrf_sweep_vals
+    
     //Here we'll encrypt and put the results into IPFS.
     //But for now we'll just print out or send somewhere.
 
@@ -119,15 +149,20 @@ void hackrf_data_updates_cb(byte *buff)
     
     //encrypt(buff);
     //Send buffer to socket
-    sendBytestoclients(buff);
+    //sendMessageToPeer
 }
 
-void client_request_cb(client_request *req)
+
+void client_request_cb(message_t *req)
 {
+    // get the cmd 
+    hackrf_sweep_request *sw_req = (hackrf_sweep_request *)req->data);
+
     //Process Sweep/Connect/Disconnect
-    if (req->cmdtype == 1)
-        sweep_request_cb((hackrf_sweep_request *)req->cmd);
-    else if (req->cmdtype == 2)
+    if (sw_req->cmdtype == 1)
+        hackrf_sweep(sw_req);
+    //sweep_request_cb((hackrf_sweep_request *)req->data);
+    else if (sw_req->cmdtype == 2)
         connect_to_new_server(req->cmd);
 
 }
