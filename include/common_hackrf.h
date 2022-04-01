@@ -10,19 +10,20 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <float.h>
 #include <unistd.h>
 #include <string.h>
 #include <netinet/in.h>
 #include <errno.h>
 #include <stdint.h>
-#include "../../../include/common.h"
+#include "/users/ed/dev/blockchainbpi/cryptreserve/include/common.h"
 
 #define MAX_IP_SIZE 16
 #define GATEWAY_CID  "QmfQkD8pBSBCBxWEwFSu4XaDVSWK6bjnNuaWZjMyQbyDub"
 
 char* ullx(uint64_t val)
 {
-    static char buf[34] = { [0 ... 33] = 0 };
+    static char buf[34] = {0};
     char* out = &buf[33];
     uint64_t hval = val;
     unsigned int hbase = 16;
@@ -40,7 +41,7 @@ char* ullx(uint64_t val)
 
 // hack rf messages ------------------------------------------------------------
 
-#pragma_pack(1);
+//#pragma_pack(1);
 
 //This is used by the client to return requested data to the server.
 // We use array of values which can be serialized across the socket.
@@ -50,14 +51,18 @@ typedef struct
     uint64_t tv_usec;
     uint64_t lowfreq;
     uint64_t upperfreq;
+    uint64_t freqmin;
+    uint64_t freqmid;
+    uint64_t freqmax;
     uint64_t fft_bin_width;
     uint64_t fftSize;
+    uint64_t bandedge;
     uint64_t sampleratefrequency1; //+(DEFAULT_SAMPLE_RATE_HZ/2)),
     uint64_t sampleratefrequency2; //+((DEFAULT_SAMPLE_RATE_HZ*3)/4)),
-    uint64_t fft_bin_width;
     uint64_t fftSampleSize;
-    uint64_t power[];
     uint16_t power_cnt;
+    uint16_t record_length;
+    uint64_t power[];
 } hackrf_sweep_vals;
 
 //Used internally within the PlugIn IoT device.
@@ -72,7 +77,6 @@ typedef struct
     uint64_t fftSize;
     uint64_t sampleratefrequency1; //+(DEFAULT_SAMPLE_RATE_HZ/2)),
     uint64_t sampleratefrequency2; //+((DEFAULT_SAMPLE_RATE_HZ*3)/4)),
-    uint64_t fft_bin_width;
     uint64_t fftSampleSize;
     uintptr_t **power;
     //dont need count we can use the defined macro
@@ -96,17 +100,9 @@ typedef struct
 typedef struct
 {
     uint8_t     cmd;
-    byte        cmdbuff[MAX_DATA_SIZE];
+    uint8_t		cmdbuff[MAX_DATA_SIZE];
     uint16_t    cmdlen;
 } server_req; // in reality this may be the IoT Gateway
-
-typedef struct
-{
-    char peerCID[MAX_CID_SIZE];
-    char ip[SERVER_IPV4_ADDR];
-    uint16_t port;
-    *(void processMessageCB(void *)) appPMFunc_cb;
-} startClientSocketThreadArgs;
 
 typedef struct
 {
@@ -115,25 +111,26 @@ typedef struct
     *(void processMessageCB(void *)) procHackRFSweepMsgCB;
 } startHackRFThreadArgs;
 
-#pragma_unpack(0);
+//#pragma_unpack(0);
 
 
 int prepare_hrf_message(hackrf_client_sweep_vals *hrfcs_vals)
 {
     //hackrf_client_sweep_args
     //Deserialize each member into a byte array
-  sprintf(message->sender, "%s", sender);
-  sprintf(message->data, "%s", serialize(hrfcs_vals));
-  return 0;
+  	//sprintf(message->sender, "%s", sender);
+  	//sprintf(message->data, "%s", serialize(hrfcs_vals));
+  	return 0;
 }
  
-byte* serialize_char(unsigned char* buff, int val)
+uint8_t* serialize_char(unsigned char* buff, int val)
 {
     buff[0] = val >>24;
 
-    byte *bytearrbuff = (byte*)malloc(sizeof(byte)*sizeof(hrfcs_vals)+1);
+    uint8_t *bytearrbuff = (uint8_t*)malloc(sizeof(uint8_t)*sizeof(hrfcs_vals)+1);
 
     sprintf(*bytearrbuff,"%f", hrfcs_vals->frequency);
+    return bytearrbuff;
 }
 
 unsigned char *serialize_uint16(unsigned char* buff, uint16_t val)
@@ -148,6 +145,7 @@ unsigned char *serialize_uint16(unsigned char* buff, uint16_t val)
     buff[7] = val >> 16;
     buff[8] = val >> 24;
     buff[9] = val >> 16;
+    return buff;
 }
 unsigned char *serialize_uint64(unsigned char* buff, uint64_t val)
 {
@@ -162,13 +160,16 @@ unsigned char *serialize_uint64(unsigned char* buff, uint64_t val)
     buff[8] = val >> 24;
     buff[9] = val >> 16;
 
-
+    return buff;
 }
-unsigned char* serialize_char()
+
+unsigned char* serialize_char(unsigned char* buff, int val)
 {
 
+    return 0;
 }
-int print_hrf_message(byte *hrfsweepvalbytes)
+
+int print_hrf_message(uint8_t *hrfsweepvalbytes)
 {
     //cast *byte to *hackrf_sweep_vals
     // need to pack the struct field by field
@@ -184,14 +185,13 @@ int print_hrf_message(byte *hrfsweepvalbytes)
     hrfs_vals->fft_bin_width;
     hrfs_vals->fftSampleSize;
     hrfs_vals->power = malloc(sizeof(hrfs_vals->power)*hrfs_vals->power_cnt);
-    for(int i=0; i<=power_cnt; i++)
+    /*for(int i=0; i<=hrfs_vals->power_cnt; i++)
     {
-        hrfs_vals->power[];
+        hrfs_vals->power[i]=ma;
         hrfs_vals->power_cnt;
-    }
+    }*/
 
-    printf("Message: \"%llx: %llx\"\n", val->sender, val->data);
-    printf("%llx", myval);
+    printf("Message: \"%llx: %llx\"\n", hrfs_vals->upperfreq, hrfs_vals->lowfreq);
     return 0;
 }
 

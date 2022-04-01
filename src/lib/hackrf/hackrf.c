@@ -1,26 +1,3 @@
-/*
-Copyright (c) 2012, Jared Boone <jared@sharebrained.com>
-Copyright (c) 2013, Benjamin Vernoux <titanmkd@gmail.com>
-Copyright (c) 2013, Michael Ossmann <mike@ossmann.com>
-
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
-
-    Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
-    Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the 
-	documentation and/or other materials provided with the distribution.
-    Neither the name of Great Scott Gadgets nor the names of its contributors may be used to endorse or promote products derived from this software
-	without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, 
-THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
-
 #include "../../../include/hackrf.h"
 
 #include <stdlib.h>
@@ -416,7 +393,8 @@ hackrf_device_list_t* ADDCALL hackrf_device_list()
 	list->usb_board_ids = calloc(list->usb_devicecount, sizeof(enum hackrf_usb_board_id));
 	list->usb_device_index = calloc(list->usb_devicecount, sizeof(int));
 	
-	if ( list->serial_numbers == NULL || list->usb_board_ids == NULL || list->usb_device_index == NULL) {
+	if ( list->serial_numbers == NULL || list->usb_board_ids == NULL || list->usb_device_index == NULL) 
+	{
 		hackrf_device_list_free(list);
 		return NULL;
 	}
@@ -1888,7 +1866,7 @@ int ADDCALL hackrf_set_hw_sync_mode(hackrf_device* device, const uint8_t value) 
  *         interleaved sub-steps, allowing the host to select the best portions
  *         of the FFT of each sub-step and discard the rest.
  */
-int ADDCALL hackrf_init_sweep(hackrf_device* device, hackrf_
+int ADDCALL hackrf_init_sweep(hackrf_device* device, 
 		const uint16_t* frequency_list, const int num_ranges,
 		const uint32_t num_bytes, const uint32_t step_width,
 		const uint32_t offset, const enum sweep_style style) {

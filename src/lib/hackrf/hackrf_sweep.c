@@ -23,6 +23,7 @@
 
 #include "../../../include/hackrf.h"
 #include "../../../include/hackrf_sweep.h"
+#include "../../../include/common_hackrf.h"
 #include "../../../../../include/common.h"
 #include <getopt.h>
 #include <time.h>
@@ -192,7 +193,7 @@ fftwf_complex *ifftwIn = NULL;
 fftwf_complex *ifftwOut = NULL;
 fftwf_plan ifftwPlan = NULL;
 uint32_t ifft_idx = 0;
-float* pwr;
+float* power;
 float* window;
 
 float logPower(fftwf_complex in, float scale)
@@ -207,7 +208,7 @@ int rx_callback(hackrf_transfer* transfer) {
 	int8_t* buf;
 	uint8_t* ubuf;
 	uint64_t frequency; /* in Hz */
-	uint64_t band_edge;
+	uint64_t bandedge;
 	uint32_t record_length;
 	int i, j, ifft_bins;
 	struct tm *fft_time;
@@ -216,7 +217,7 @@ int rx_callback(hackrf_transfer* transfer) {
 
     // Pack a structure to use for unpacking bytes by the server.
     // Generalized serialize/deserialize is slow.
-    
+
 	if(NULL == fd) {
 		return -1;
 	}
@@ -284,9 +285,9 @@ int rx_callback(hackrf_transfer* transfer) {
 		buf += fftSize * 2;
 		fftwf_execute(fftwPlan);
 		for (i=0; i < fftSize; i++) {
-			pwr[i] = logPower(fftwOut[i], 1.0f / fftSize);
+			power[i] = logPower(fftwOut[i], 1.0f / fftSize);
 		}
-		if(binary_output) 
+		if(binary_output)
         {
             /*
             byte buffer[MAXSIZEMSG];
@@ -305,44 +306,44 @@ int rx_callback(hackrf_transfer* transfer) {
             memcpy(buffer + 104, ss1.buf, 100);
             ssize_t size=send(client_sock, buffer, BUFFER_LEN);
             */
-            
+
             // Call cb with the fields
-            hackrf_sweep_vals *sweepvals = (*hackrf_sweep_vals)malloc(sizeof(hackrf_sweep_vals));
+            hackrf_sweep_vals *sweepvals = (hackrf_sweep_vals*)malloc(sizeof(hackrf_sweep_vals*));
             sweepvals->tv_usec = (uint64_t)(time_stamp.tv_usec);
             sweepvals->lowfreq = (uint64_t)(frequency);
             sweepvals->upperfreq = (uint64_t)(frequency+(DEFAULT_SAMPLE_RATE_HZ/4));
-            sweepvals->frequency1 = (uint64_t)(frequency+(DEFAULT_SAMPLE_RATE_HZ/2)),
-            sweepvals->frequency2 = (uint64_t)(frequency+((DEFAULT_SAMPLE_RATE_HZ*3)/4)),
+            sweepvals->freqmin = (uint64_t)(frequency+(DEFAULT_SAMPLE_RATE_HZ/2)),
+            sweepvals->freqmax = (uint64_t)(frequency+((DEFAULT_SAMPLE_RATE_HZ*3)/4)),
             sweepvals->fft_bin_width = fft_bin_width;
             sweepvals->fftSize = fftSize;
-            sweepvals->band_edge = frequency;
-           
-            sweepvals->record_length, sizeof(record_length); 
-            2 * sizeof(band_edge)
-                    + (fftSize/4) * sizeof(float);
-            sweepvals->pwr = malloc(sizeof(sweepvals->pwr), (fftSize / 4)+1);
+            sweepvals->bandedge = frequency;
 
-            for(i = 0; (fftSize / 4) > i; i++) {
-                sweepvals->pwr[i] = pwr[i + 1 + (fftSize/8)]);
+            sweepvals->record_length = sizeof(record_length);
+            //2 * sizeof(bandedge)
+              //      + (fftSize/4) * sizeof(float);
+            sweepvals->power = malloc(sizeof(sweepvals->power)*(fftSize / 4)+1);
 
-            retdata2client_cb(sweepvals);
+            for(i = 0; (fftSize / 4) > i; i++)
+                sweepvals->power[i] = power[i + 1 + (fftSize/8)];
 
-			record_length = 2 * sizeof(band_edge)
+            //hackrf_sweep_args.retdata2client_cb(sweepvals);
+
+			record_length = 2 * sizeof(bandedge)
 					+ (fftSize/4) * sizeof(float);
 
 /*			fwrite(&record_length, sizeof(record_length), 1, fd);
-			band_edge = frequency;
-			fwrite(&band_edge, sizeof(band_edge), 1, fd);
-			band_edge = frequency + DEFAULT_SAMPLE_RATE_HZ / 4;
-			fwrite(&band_edge, sizeof(band_edge), 1, fd);
-			fwrite(&pwr[1+(fftSize*5)/8], sizeof(float), fftSize/4, fd);
+			bandedge = frequency;
+			fwrite(&bandedge, sizeof(bandedge), 1, fd);
+			bandedge = frequency + DEFAULT_SAMPLE_RATE_HZ / 4;
+			fwrite(&bandedge, sizeof(bandedge), 1, fd);
+			fwrite(&power[1+(fftSize*5)/8], sizeof(float), fftSize/4, fd);
 
 			fwrite(&record_length, sizeof(record_length), 1, fd);
-			band_edge = frequency + DEFAULT_SAMPLE_RATE_HZ / 2;
-			fwrite(&band_edge, sizeof(band_edge), 1, fd);
-			band_edge = frequency + (DEFAULT_SAMPLE_RATE_HZ * 3) / 4;
-			fwrite(&band_edge, sizeof(band_edge), 1, fd);
-			fwrite(&pwr[1+fftSize/8], sizeof(float), fftSize/4, fd);
+			bandedge = frequency + DEFAULT_SAMPLE_RATE_HZ / 2;
+			fwrite(&bandedge, sizeof(bandedge), 1, fd);
+			bandedge = frequency + (DEFAULT_SAMPLE_RATE_HZ * 3) / 4;
+			fwrite(&bandedge, sizeof(bandedge), 1, fd);
+			fwrite(&power[1+fftSize/8], sizeof(float), fftSize/4, fd);
             */
 		} else if(ifft_output) {
 			ifft_idx = (uint32_t) round((frequency - (uint64_t)(FREQ_ONE_MHZ*frequencies[0]))
@@ -360,9 +361,9 @@ int rx_callback(hackrf_transfer* transfer) {
 			}
 		} else {
 
-            // Here is where we'd probably call the callback function 
+            // Here is where we'd probably call the callback function
             // back to the CR Node or client.
-            
+
             uint64_t _frequency = (uint64_t)(frequency);
 
 			time_t time_stamp_seconds = time_stamp.tv_sec;
@@ -376,7 +377,7 @@ int rx_callback(hackrf_transfer* transfer) {
 					fft_bin_width,
 					fftSize);
 			for(i = 0; (fftSize / 4) > i; i++) {
-				fprintf(fd, ", %.2f", pwr[i + 1 + (fftSize*5)/8]);
+				fprintf(fd, ", %.2f", power[i + 1 + (fftSize*5)/8]);
 			}
 			fprintf(fd, "\n");
 			fprintf(fd, "%s.%06ld, %" PRIu64 ", %" PRIu64 ", %.2f, %u",
@@ -387,35 +388,36 @@ int rx_callback(hackrf_transfer* transfer) {
 					fft_bin_width,
 					fftSize);
 			for(i = 0; (fftSize / 4) > i; i++) {
-				fprintf(fd, ", %.2f", pwr[i + 1 + (fftSize/8)]);
+				fprintf(fd, ", %.2f", power[i + 1 + (fftSize/8)]);
 			}
 			fprintf(fd, "\n");
-            
+
             // Call cb with the fields
-             hackrf_sweep_vals *sweepvals = (*hackrf_sweep_vals)malloc(sizeof(hackrf_sweep_vals));
+             hackrf_sweep_vals *sweepvals = (hackrf_sweep_vals*)malloc(sizeof(hackrf_sweep_vals));
              //struct tm *localtime(const time_t *timer)
             // sweepvals->time_str = time_str;
              sweepvals->tv_usec = (uint64_t)time_stamp.tv_usec;
              sweepvals->lowfreq = (uint64_t)(frequency);
              sweepvals->upperfreq = (uint64_t)(frequency);
-             sweepvals->frequency1 = (uint64_t)(frequency+(DEFAULT_SAMPLE_RATE_HZ/2)),
-             sweepvals->frequency2 = (uint64_t)(frequency+DEFAULT_SAMPLE_RATE_HZ/4);
-             sweepvals->frequency2 = (uint64_t)(frequency+((DEFAULT_SAMPLE_RATE_HZ*3)/4)),
+             sweepvals->freqmin = (uint64_t)(frequency+(DEFAULT_SAMPLE_RATE_HZ/2)),
+             sweepvals->freqmid = (uint64_t)(frequency+DEFAULT_SAMPLE_RATE_HZ/4);
+             sweepvals->freqmax = (uint64_t)(frequency+((DEFAULT_SAMPLE_RATE_HZ*3)/4)),
              sweepvals->fft_bin_width = fft_bin_width;
-             
-             //Use macro NUM_ELEM(sweepvals->pwr) in hackrf_common.h
+
+             //Use macro NUM_ELEM(sweepvals->power) in hackrf_common.h
              //sweepvals->fftSize = fftSize;
-            
+
              int fftSampleSize = fftSize / 4;
 
-             sweepvals->pwr = (*sweepvals->pwr)malloc(sizeof(*sweepvals->pwr) * fftSampleSize);
-              for(i = 0; fftSampleSize > i; i++) 
+              sweepvals = (sweepvals*)malloc(sizeof(sweepvals->power*) * fftSampleSize);
+              for(i = 0; fftSampleSize > i; i++)
               {
-                fprintf(fd, ", %.2f", pwr[i + 1 + (fftSize*5)/8]);
-                sweepvals->pwr[i] = pwr[i + 1 + (fftSize*5)/8];
+                fprintf(fd, ", %.2f", power[i + 1 + (fftSize*5)/8]);
+                sweepvals->power[i] = power[i + 1 + (fftSize*5)/8];
               }
-             retdata2client_cb(sweepvals);
-            // cb(time_str, time_stamp.tv_usec, 
+            
+              //sweepvals->retdata2client_cb(sweepvals);
+            // cb(time_str, time_stamp.tv_usec,
             //  fft_bin_width, fftSize);
 		}
 	}
@@ -478,7 +480,7 @@ int InitHackRFDevice(hackrf_device* hackrf_dev)
 #endif
     fprintf(stderr, "call hackrf_sample_rate_set(%.03f MHz)\n",
            ((float)DEFAULT_SAMPLE_RATE_HZ/(float)FREQ_ONE_MHZ));
-    result = hackrf_set_sample_rate_manual(device, DEFAULT_SAMPLE_RATE_HZ, 1);
+    int result = hackrf_set_sample_rate_manual(device, DEFAULT_SAMPLE_RATE_HZ, 1);
     if( result != HACKRF_SUCCESS ) {
         fprintf(stderr, "hackrf_sample_rate_set() failed: %s (%d)\n",
                hackrf_error_name(result), result);
@@ -502,9 +504,10 @@ int InitHackRFDevice(hackrf_device* hackrf_dev)
 static void hackRFSweepThread( void *hrf_args)
 {
     //HackRFThreadData p_ThreadData = (HackRFThreadData*)hrf_tdata;
-    HackRFSweepArgs *p_hrfsa = (HackRFSweepArgs*)hrf_args;
+    hackrf_sweep_args *p_hrfsa = (hackrf_sweep_args*)hrf_args;
     int serial_number = p_hrfsa->serial_number;
-    SendToClientCB = p_hrfsa->sendsweepresultstoclientcb;
+    //SendToClientCB = p_hrfsa->retdata2client_cb;
+        //sendsweepresultstoclientcb;
 	int result = hackrf_init();
 	if( result != HACKRF_SUCCESS ) {
 		fprintf(stderr, "hackrf_init() failed: %s (%d)\n", hackrf_error_name(result), result);
@@ -528,8 +531,8 @@ static void hackRFSweepThread( void *hrf_args)
 	if(NULL == fd) {
 		fprintf(stderr, "Failed to open file: %s\n", path);
 		return EXIT_FAILURE;
-	
-	// Change fd buffer to have bigger one to store or read data on/to HDD 
+
+	// Change fd buffer to have bigger one to store or read data on/to HDD
 	result = setvbuf(fd , NULL , _IOFBF , FD_BUFFER_SIZE);
 	if( result != 0 ) {
 		fprintf(stderr, "setvbuf() failed: %d\n", result);
@@ -568,41 +571,8 @@ static void hackRFSweepThread( void *hrf_args)
 		return EXIT_FAILURE;
 	}
 
-	result = 
+	return result;
 }
-static int StartHackRFSweepService(startHackRFThreadData *pHackRFThreadData)
-{
-    int result=0;
-    pthread_t processRequestThread;
-
-    /*pHackRFThreadData->port = PORT;
-    pHackRFThreadData->path = (char*)malloc(sizeof(char*)*strlen(PATH))+1;
-    strncpy(pHackRFThreadData->path, PATH, sizeof(pThreadCurlData->path) -1);
-    pHackRFThreadData->url = (char*)malloc(sizeof(char*)*strlen(URL))+1;  //"localhost";
-    strncpy(pHackRFThreadData->url, URL, sizeof(pHackRFThreadData->url)-1);
-    pHackRFThreadData->protocol  = (char*)malloc(sizeof(char*)*strlen(PROTOCOL)+1);  //"https";
-    pHackRFThreadData->running = true;
-    strncpy(pHackRFThreadData->protocol, PROTOCOL, sizeof(pHackRFThreadData->protocol)); // = "https";
-*/
-    printf("Start HackRF Sweep Service Thread.\n");
-    int result = 
-        pthread_create(&hackRFSweepThread, NULL, hackrf_sweep, (void *)pHackRFThreadData);
-
-    if(result == 0)
-    {
-        fprintf(stderr, "Error creating hackRFSweepThread. Err=%d\n", result);
-        return result;
-    }
-
-    //Wait here until thread is done.
-    pthread_join(hackRFSweepThread, NULL);
-
-    printf("Joined HackRFSweepThread.  Shutting down HackRFSweepService now...\n");
-
-    return result;
-}
-
-
 
 int hackrf_sweep(hackrf_sweep_args *args)
 {
@@ -619,9 +589,9 @@ int hackrf_sweep(hackrf_sweep_args *args)
 	uint32_t freq_max = args->freq_max;
 	uint32_t requested_fft_bin_width = args->requested_fft_bin_width;
     uint32_t num_sweeps = args->num_sweeps;
-    uint32_t num_sweeps = args->sweeps;
+    //uint32_t num_sweeps = args->sweeps;
 
-    retdata2client_cb = args->retdata2client_cb;
+    //retdata2client_cb = args->retdata2client_cb;
 
     if(MAX_SWEEP_RANGES <= num_ranges) {
         fprintf(stderr,
@@ -647,7 +617,7 @@ int hackrf_sweep(hackrf_sweep_args *args)
     frequencies[2*num_ranges] = (uint16_t)freq_min;
     frequencies[2*num_ranges+1] = (uint16_t)freq_max;
     num_ranges++;
-    
+
     if (lna_gain % 8)
 		fprintf(stderr, "warning: lna_gain (-l) must be a multiple of 8\n");
 
@@ -720,7 +690,7 @@ int hackrf_sweep(hackrf_sweep_args *args)
 	fftwIn = (fftwf_complex*)fftwf_malloc(sizeof(fftwf_complex) * fftSize);
 	fftwOut = (fftwf_complex*)fftwf_malloc(sizeof(fftwf_complex) * fftSize);
 	fftwPlan = fftwf_plan_dft_1d(fftSize, fftwIn, fftwOut, FFTW_FORWARD, FFTW_MEASURE);
-	pwr = (float*)fftwf_malloc(sizeof(float) * fftSize);
+	power = (float*)fftwf_malloc(sizeof(float) * fftSize);
 	window = (float*)fftwf_malloc(sizeof(float) * fftSize);
 	for (i = 0; i < fftSize; i++) {
 		window[i] = (float) (0.5f * (1.0f - cos(2 * M_PI * i / (fftSize - 1))));
@@ -848,11 +818,43 @@ int hackrf_sweep(hackrf_sweep_args *args)
 	}
 	fftwf_free(fftwIn);
 	fftwf_free(fftwOut);
-	fftwf_free(pwr);
+	fftwf_free(power);
 	fftwf_free(window);
 	fftwf_free(ifftwIn);
 	fftwf_free(ifftwOut);
 	fprintf(stderr, "exit\n");
 	return exit_code;
 }
+
+static int StartHackRFSweepService(startHackRFThreadArgs *pHackRFThreadData)
+{
+    int result=0;
+    pthread_t processRequestThread;
+
+    /*pHackRFThreadData->port = PORT;
+    pHackRFThreadData->path = (char*)malloc(sizeof(char*)*strlen(PATH))+1;
+    strncpy(pHackRFThreadData->path, PATH, sizeof(pThreadCurlData->path) -1);
+    pHackRFThreadData->url = (char*)malloc(sizeof(char*)*strlen(URL))+1;  //"localhost";
+    strncpy(pHackRFThreadData->url, URL, sizeof(pHackRFThreadData->url)-1);
+    pHackRFThreadData->protocol  = (char*)malloc(sizeof(char*)*strlen(PROTOCOL)+1);  //"https";
+    pHackRFThreadData->running = true;
+    strncpy(pHackRFThreadData->protocol, PROTOCOL, sizeof(pHackRFThreadData->protocol)); // = "https";
+*/
+    printf("Start HackRF Sweep Service Thread.\n");
+    result = pthread_create(&hackRFSweepThread, NULL, hackrf_sweep, (void *)pHackRFThreadData);
+
+    if(result == 0)
+    {
+        fprintf(stderr, "Error creating hackRFSweepThread. Err=%d\n", result);
+        return result;
+    }
+
+    //Wait here until thread is done.
+    pthread_join(hackRFSweepThread, NULL);
+
+    printf("Joined HackRFSweepThread.  Shutting down HackRFSweepService now...\n");
+
+    return result;
+}
+
 

@@ -10,12 +10,14 @@ int main(int argc, char** argv)
 {
     //Start the Curl IPFS Client and Rest API Server
     pthread_t clientSocketThread;
-    pthread_t hackrfThread;
 
-    if(pthread_create(&clientSocketThread, NULL, &ClientSocketThread, (void*) ctargs)) {
+    clientSocketThread = RunClientSocket();
+    if(clientSocketThread == NULL))
+    {
         fprintf(stderr, "Error creating Client Socket thread.\n");
         return 1;
     }
+
     printf("Started Client Socket Thread.\n");
 
 
@@ -24,6 +26,8 @@ int main(int argc, char** argv)
     // We also handle multiple devices by serial number.
     // 
     printf("Starting HackRF Device(s) Manager Thread.\n");
+    
+    pthread_t hackrfThread;
     /* create a HackRF thread */
     startHackRFThreadData* hrftd = (startHackRFThreadData*)malloc(sizeof(startHackRFThreadData));
     hrftd->procHackRFSweepMsgCB = hackrf_data_updates_cb ;
@@ -34,22 +38,19 @@ int main(int argc, char** argv)
     }
     printf("Started HackRF Thread.\n");
 
-    /*
-    // If entitled:
-    printf("Starting HackRF Admininstration Thread.\n");
-    // create a HackRF Admininstration HackRF Device Threadthread 
+    printf("Starting HackRF Plugin Thread.\n");
+    // create a HackRF Plugin Device Thread
     hackrf_plugin_device* hrftd = (hackrf_plugin_device*)malloc(sizeof(hackrf_plugin_device));
-    
-    if(pthread_create(&hackRFAdminThread, NULL, &HackRFAdminThread, (void*) hrftd )) {
-        fprintf(stderr, "Error creating Admininstration HackRF Device Thread\n");
+    pthread_t hackrfPluginThread;
+    if(pthread_create(&hackPluginThread, NULL, &PluginThread, (void*) hrftd )) {
+        fprintf(stderr, "Error creating HackRF Plugin Device Thread\n");
         return 1;
     }
-    printf("Started HackRF Admininstration Thread.\n");
-    */
+    printf("Started HackRF Plugin  Thread.\n");
 
     pthread_join(clientSocketThread, NULL);
     pthread_join(hackRFThread, NULL);
-    //pthread_join(hackRFAdminThread, NULL);
+    pthread_join(hackRFPluginThread, NULL);
 
     printf("Exiting HackRF Plugin...");
 
@@ -57,7 +58,7 @@ int main(int argc, char** argv)
 }
 
 pthread_t RunClientSocket()
-{ 
+{
     pthread_t clientSocketThread;
 
     //Client Socket Connection Thread to manage connections
@@ -65,32 +66,25 @@ pthread_t RunClientSocket()
     // add/remove to other Clients.
     printf("Starting a Client Socket Thread.\n");
 
-    startClientSocketThreadArgs *cstargs = malloc(sizeof(startClientSocketThreadArgs));
-    ctargs.ip = malloc(sizeof(char*), MAX_IP_SIZE);
-    strncpy(ctargs.ip, SERVER_IPV4_ADDR, SERVER_IPV4_ADDR);
-    ctargs.port = SERVER_LISTEN_PORT;
-    ctargs.CID = malloc(strlen(MAX_CID_LEN")+1);
-    strncpy(ctargs.CID, SERVER_CID, strlen(SERVER_CID));
-    ctargs.cbIncomingMsg = &client_request_cb;
-    ctargs.clientSweepRequestCB = &sweep_request_cb;
-    
+
     // Create a Client Socket thread to Server (or gateway).  This is a basic IoT thin client owned by a gateway.
     // Each Gateway has n clients or IoT devices.  The IoT devices will encrypt the data with the Gateways key.
     // This plugin service should get commands from the server by providing a callback func. (sweep_request_cb)
-    if(pthread_create(&clientSocketThread, NULL, &ClientSocketThread, (void*) ctargs)) 
+    if(pthread_create(&clientSocketThread, NULL, &ClientSocketThread, NULL))
     {
         fprintf(stderr, "Error creating Client Socket thread.\n");
-        return 1;
+        return 0;
     }
     printf("Started Client Socket Thread.\n");
+    return clientSocketThread;
 }
 
-static void* AdminHackRFDeviceThread(void *args)
-{   
+static void* PluginThread(void *args)
+{
     hackrf_plugin_device* hrfadmin = (hackrf_plugin_device*)malloc(sizeof(hackrf_plugin_device))
-    printf("HackRF PlugIn Starting HackRF Admininstration Device Service Thread./n");
-    StartHackRFAdmin(hrfadmin);
-    printf("HackRF PlugIn Stopped HackRF Admininstration Device Service Thread./n");
+    printf("HackRF PlugIn Starting Plugin Service Thread./n");
+    StartPlugin(hrfadmin);
+    printf("HackRF PlugIn Stopped Plugin Service Thread./n");
 }
 
 
@@ -115,12 +109,13 @@ static void* ClientSocketThread(void *args)
 
     startClientSocketThreadArgs *cstargs = malloc(sizeof(startClientSocketThreadArgs));
     //ctargs->ip = malloc(sizeof(char*), MAX_IP_SIZE);
-    strncpy(ctargs.ip, SERVER_IPV4_ADDR, SERVER_IPV4_ADDR);
+    strncpy(ctargs.ip, SERVER_IPV4_ADDR, MAX_IP_SIZE);
     ctargs.port = SERVER_LISTEN_PORT;
-    ctargs.CID = malloc(strlen(MAX_CID_SIZE")+1);
+    ctargs.CID = malloc(MAX_CID_SIZE);
     strncpy(ctargs.CID, SERVER_CID, strlen(SERVER_CID));
-    ctargs.procServerMsgCB = &client_request_cb;
-    ctargs.clientSweepRequestCB = &sweep_request_cb;
+    //ctargs.procServerMsgCB = &client_request_cb;
+    ctargs.cbIncomingMsg = &client_request_cb;
+    //ctargs.clientSweepRequestCB = &sweep_request_cb;
     // Create a Cliet Socket thread to Server (or gateway).  This is a basic IoT thin client owned by a gateway.
     // Each Gateway has n clients or IoT devices.  The IoT devices will encrypt the data with the Gateways key.
     // This plugin service should get commands from the server by providing a callback func. (sweep_request_cb)
@@ -156,7 +151,7 @@ void hackrf_data_updates_cb(byte *buff)
 void client_request_cb(message_t *req)
 {
     // get the cmd 
-    hackrf_sweep_request *sw_req = (hackrf_sweep_request *)req->data);
+    hackrf_sweep_request *sw_req = (hackrf_sweep_request *)req->data;
 
     //Process Sweep/Connect/Disconnect
     if (sw_req->cmdtype == 1)

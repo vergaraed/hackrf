@@ -1,8 +1,9 @@
-#include "hackrfadmin.h"
+#include "hackrf_admin.h"
+#include <libusb.h>
 
 static hackrf_device *admin_device;
 
-static int ConnectHackRFDevice(device *dev)
+static int ConnectHackRFDevice(hackrf_device *device)
 {
     int result = hackrf_init();
     if( result != HACKRF_SUCCESS ) {
@@ -11,7 +12,8 @@ static int ConnectHackRFDevice(device *dev)
         return EXIT_FAILURE;
     }
 
-    result = hackrf_open_by_serial(serial_number, &device);
+	result = hackrf_open(&device);
+			//result = hackrf_open_by_serial(serial_number, &device);
     if( result != HACKRF_SUCCESS ) {
         fprintf(stderr, "hackrf_open() failed: %s (%d)\n", hackrf_error_name(result), result);
         usage();
@@ -45,14 +47,14 @@ static void StartHackRF(hackrf_sweep_request *hrfadmin)
 //API
 void StartHackRFAdmin(hackrf_sweep_request device)
 {
-    hrfadmin = (hackrf_sweep_request*)malloc(sizeof(hackrf_sweep_request))
+    hrfadmin = (hackrf_sweep_request*)malloc(sizeof(hackrf_sweep_request));
     printf("HackRF PlugIn Starting HackRF Admininstration Device Service Thread./n");
     StartHackRF(hrfadmin);
-    ConnectHackRFDevice(hrfadmin);
+    ConnectHackRFDevice(hrfadmin->device);
     printf("HackRF PlugIn Stopped HackRF Admininstration Device Service Thread./n");
 }
 
-boolean ListedContainsDevice(lib_usb_device *device, int device_cnt,
+boolean ListedContainsDevice(libusb_device *device, int device_cnt,
         hackrf_sweep_request **list)
 {
     for (int i=0; i<=device_cnt; i++)
@@ -63,7 +65,7 @@ boolean ListedContainsDevice(lib_usb_device *device, int device_cnt,
     return false;
 }
 
-void StartHackRFAdmins(hackrf_sweep_request *devices, hackrf_sweep_request *started_devices))
+void StartHackRFAdmins(hackrf_sweep_request *devices, hackrf_sweep_request *started_devices)
 {
     // discover devices
     libusb_device **list;
@@ -95,20 +97,20 @@ void StartHackRFAdmins(hackrf_sweep_request *devices, hackrf_sweep_request *star
 }
 
 
-int GetListofHackRFDevices(hackrf_sweep_request *devices, const char* const desired_serial_number)
+int GetListofHackRFDevices(hackrf_sweep_request *sweepreq, const char* const desired_serial_number)
 {
     printf("HackRF Admininstration Device Service: GetListofHackRFDevices./n");
     hackrf_device_list_t* devices = hackrf_device_list();
-    if (devices != null)
+    if (devices != NULL)
     {
         printf("HackRF Admininstration Device Service: GetListofHackRFDevices: %d./n", 
             devices->usb_devicecount);
 
-        //libusb_device_handle* usb_device = NULL;
-        //libusb_device** devices = NULL;
-        //const ssize_t list_length = libusb_get_device_list(g_libusb_context, &devices);
-        //ssize_t match_len = 0;
-        //ssize_t i;
+        libusb_device_handle* usb_device = NULL;
+        libusb_device** devices = NULL;
+        const ssize_t list_length = libusb_get_device_list(g_libusb_context, &devices);
+        ssize_t match_len = 0;
+        ssize_t i;
         char serial_number[64];
         int serial_number_length;
 
